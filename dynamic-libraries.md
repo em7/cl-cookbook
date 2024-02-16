@@ -27,21 +27,26 @@ add it to your `PATH` variable.
 SBCL depends on `zstd` library. On Linux-based system, you can obtain both
 the library and its header files from the package manager, usually it's called
 something like `libzstd-dev`. On Windows, recommended way is to use
-[MSYS2](https://www.msys2.org) which includes `zstd` and its headers.
+[MSYS2](https://www.msys2.org) which includes both Roswell, `zstd` and its headers.
 
 Go to the directory with sources and run:
 
 ~~~bash
 # Bash
 
+# (assuming the version of your SBCL installed via Roswell is 2.4.1)
 export PATH=~/.roswell/impls/x86-64/linux/sbcl-bin/2.4.1/bin/:$PATH
 
 ./make-config.sh --fancy
-
-cd ./tests && sh ./run-tests.sh
+./make.sh --fancy
+./make-shared-library.sh --fancy
 ~~~
 
 Note that the shared library has `.so` extension even on Windows and Mac
-but it seems to work just fine.
+but it seems to work just fine. If you use Roswell in MSYS2, it can sometimes
+use you Windows home directory rather than your MSYS2 home diretory, which
+are different paths. So the path to Roswell is `/C/Users/<username>/.roswell`,
+not `~/.roswell/`.
 
+### Download SBCL-Librarian
 
