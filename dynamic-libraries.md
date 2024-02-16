@@ -9,12 +9,12 @@ i.e. compiling your CL library as a library callable via C ABI from
 other languages, might be rare.
 
 Commercial implementations like LispWorks and Allegro CL usually
-offer this functionality and are well documented.
+offer this functionality and they are well documented.
 
 This chapter describes a project called [SBCL-Librarian](https://github.com/quil-lang/sbcl-librarian), an opinionated way to create libraries callable from C (anything which has C FFI) and Python using an open-source and free-to-use implementation [Steel Bank Common Lisp](https://www.sbcl.org).
 
 
-## Preparing your Environment
+## Preparing Environment
 
 ### Make SBCL Shared Library
 
