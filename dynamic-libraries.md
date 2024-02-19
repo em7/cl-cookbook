@@ -48,5 +48,79 @@ use you Windows home directory rather than your MSYS2 home diretory, which
 are different paths. So the path to Roswell is `/C/Users/<username>/.roswell`,
 not `~/.roswell/`.
 
-### Download SBCL-Librarian
+### Download and setup SBCL-Librarian
 
+Clone the SBCL-Librarian repostiory
+
+~~~bash
+git clone https://github.com/quil-lang/sbcl-librarian.git
+~~~
+
+SBCL-Librarian expects the path to SBCL sources in `SBCL_SRC` environment variable. Shred libraries are not commonly searched for in the current working directory on newer Linux-based operating systems. This can be fixed by setting environment variable `LD_LIBRARY_PATH`.
+
+~~~bash
+export SBCL_SRC=~/.roswell/src/sbcl-2.4.1
+export LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH
+~~~
+
+### Let's start with callback example
+
+!!!!TODO!!!!! This is ... well, a total mess. ! Probably start with very simple example, then this....
+
+
+
+SBCL Librarian has two examples - a simple callback and a more complex calculator. Let's explore the callback.
+
+It already contains a Makefile for Mac. For a Linxu-based OS, we should change the name of the created library from `libcallback.dylib` to `libcallback.so` (on Windows to `libcallback.dll`) and the `$(CC)` parameters for `libcallback.so` (or `dll`) target should be changed from `-dynamiclib` to `-shared -fpic`:
+
+~~~Makefile
+EXAMPLES_DIR := $(shell pwd)
+ROOT_DIR := $(shell dirname $(shell dirname $(EXAMPLES_DIR)))
+
+
+.PHONY: all clean
+
+all: libsbcl.so libcallback.so
+
+libsbcl.so: $(SBCL_SRC)
+	test ! -e $(SBCL_SRC)/src/runtime/libsbcl.so && cd $(SBCL_SRC) && ./make-shared-library.sh || true
+	cp $(SBCL_SRC)/src/runtime/libsbcl.so ./
+
+libcallback.core libcallback.c libcallback.h libcallback.py: 
+	CL_SOURCE_REGISTRY="$(ROOT_DIR)//" $(SBCL_SRC)/run-sbcl.sh --script "script.lisp"
+
+libcallback.so: libcallback.core libcallback.c
+	$(CC) -shared -fpic -o $@ libcallback.c -L$(SBCL_SRC)/src/runtime -lsbcl
+clean:
+	rm -f libsbcl.so libcallback.c libcallback.h libcallback.core libcallback.py libcallback.so
+~~~
+
+Windows:
+
+~~~Makefile
+EXAMPLES_DIR := $(shell pwd)
+ROOT_DIR := $(shell dirname $(shell dirname $(EXAMPLES_DIR)))
+
+
+.PHONY: all clean
+
+all: libsbcl.so libcallback.dll
+
+# For some reason, even on OSX SBCL builds its library with *.so
+# extension, but this works!
+libsbcl.so: $(SBCL_SRC)
+	test ! -e $(SBCL_SRC)/src/runtime/libsbcl.so && cd $(SBCL_SRC) && ./make-shared-library.sh || true
+	cp $(SBCL_SRC)/src/runtime/libsbcl.so ./libsbcl.dll
+
+libcallback.core libcallback.c libcallback.h libcallback.py: 
+	export CL_SOURCE_REGISTRY="$(ROOT_DIR):$(EXAMPLES_DIR)" && \
+	echo "cl_source_registry ${CL_SOURCE_REGISTRY}" && \
+	$(SBCL_SRC)/run-sbcl.sh --script "script.lisp"
+
+libcallback.dll: libcallback.core libcallback.c
+	$(CC) -shared -fpic -o $@ libcallback.c -L$(SBCL_SRC)/src/runtime -L$(EXAMPLES_DIR) -lsbcl
+clean:
+	rm -f libsbcl.dll libcallback.c libcallback.h libcallback.core libcallback.py libcallback.so
+~~~
+
+Python function find_library on Windows / MSYS: export PATH=.:$PATH
