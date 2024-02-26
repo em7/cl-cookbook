@@ -18,7 +18,7 @@ This chapter describes a project called [SBCL-Librarian](https://github.com/quil
 
 ### Make SBCL Shared Library
 
-Binary distributions of SBCL usually don't come with shared library which is needed for SBCL-Librarian. You can download either from [SBCL git repository](https://github.com/sbcl/sbcl) or [using Roswell](getting-started.html#with-roswell) by running command `ros install sbcl-source`.
+Binary distributions of SBCL usually don't come with SBCL built as a shared library which is needed for SBCL-Librarian. You can download either from [SBCL git repository](https://github.com/sbcl/sbcl) or [using Roswell](getting-started.html#with-roswell) by running command `ros install sbcl-source`.
 
 SBCL also needs a working Common Lisp system to bootstrap the compiliation
 process. Easy trick is to download a binary installation from Roswell and
@@ -56,6 +56,97 @@ Clone the SBCL-Librarian repostiory
 git clone https://github.com/quil-lang/sbcl-librarian.git
 ~~~
 
+### Let's start with callback example
+
+SBCL-Librarian comes with a couple of examples, the simple one is a callback to Python code.
+
+ASD file `libcallback.asd` declares a dependency on SBCL-Librarian
+
+~~~lisp
+:defsystem-depends-on (#:sbcl-librarian)
+:depends-on (#:sbcl-librarian)
+~~~
+
+ASDF system need to know where to look for SBCL-Librarian sources. One way is to set its directory your `CL_SOURCE_REGISTRY` environment variable.
+
+`bindings.lisp` contains the important parts for generating the C bindings.
+
+~~~lisp
+(defun call-callback (callback outbuffer)
+  (sb-alien:with-alien ((str sb-alien:c-string "I guess "))
+    (sb-alien:alien-funcall callback str outbuffer)))
+~~~
+
+This is the most important function from the example - this one is called from Python code and calls back a Python method (`callback` parameter). Since SBCL-Librarian creates a C library and a Python module which wraps it, this function can be called from both C and Python. This example uses Python.
+
+SBCL-Librarian uses `sb-alien` which is a SBCL package for calling C functions.`with-alien` creates a resource (in this case `str` of type `c-string`) which valid within its body and is disposed of when it gets out of scope, preventing memory leaks. `alien-funcall` calls a C function, in this case its `callback`. It is called with the newly created string and a string buffer which was passed in as an argument.
+
+~~~lisp
+(sbcl-librarian::define-type :callback
+  :c-type "void*"
+  :alien-type (sb-alien:* (sb-alien:function sb-alien:void sb-alien:c-string (sb-alien:* sb-alien:char)))
+  :python-type "c_void_p")
+
+(sbcl-librarian::define-type :char-buffer
+  :c-type "char*"
+  :alien-type (sb-alien:* sb-alien:char)
+  :python-type "c_char_p")
+~~~
+
+This part defines types `callback` and `char-buffer`, in all three languages - C, Python and Common Lisp. C and Python types are `void *`. Common Lisp type has a proper function prototype. `sb-alien:*` means pointer, so `:callback` is a pointer to function, the result type of which is `void`, and which takes two parameters, a `c-string` and a `char *` (SB-Alien differentiates between a string and a pointer to a character).
+
+`:char-buffer` type is a `char *` in all three languages.
+
+~~~lisp
+(define-enum-type error-type "err_t"
+  ("ERR_SUCCESS" 0)
+  ("ERR_FAIL" 1))
+
+(define-error-map error-map error-type 0
+  ((t (lambda (condition)
+        (declare (ignore condition))
+        (return-from error-map 1)))))
+~~~
+
+This creates a mapping between conditions signalled by Common Lisp functions and a return type of the wrapping C functions. If a condition is signalled from Common Lisp, it is translated to a number - a C function return value - within `define-error-map`. The enumeration type adds a C enum so instead of
+
+~~~C
+if (1 == cl_function()) {
+~~~
+
+you can type
+
+~~~C
+if (ERR_FAIL == cl_function()) {
+~~~
+
+which is easier to read.
+
+~~~lisp
+(define-api libcallback-api (:error-map error-map
+                             :function-prefix "callback_")
+    (:literal "/* types */")
+  (:type error-type)
+  (:literal "/* functions */")
+  (:function
+   (call-callback :void ((fn :callback) (out_buffer :char-buffer)))))
+
+(define-aggregate-library libcallback (:function-linkage "CALLBACKING_API")
+  sbcl-librarian:handles sbcl-librarian:environment libcallback-api)
+~~~
+
+Finally, `define-api` describes the structure of the code of library to create - what should be the error map, what types and fuctions to include and in which order (`:literal` is just a literal, used for comments in this case). Note taht the function named `call-callback` uses previously defined types for its arguments, `callback` type for first argument called `fn` and `:char-buffer` type for its second argument `out_buffer`. Since `:function-prefix` is used, the actual name of the exported function will be `callback_call_callback`.
+
+The last part, `define-aggregate-library` defines the whole library, what should be included and in which order.
+
+
+
+
+--------------------------------------------
+
+
+**!!!!TODO!!!!!** This is ... well, a total mess. ! Probably start with very simple example, then this....
+
 SBCL-Librarian expects the path to SBCL sources in `SBCL_SRC` environment variable. Shred libraries are not commonly searched for in the current working directory on newer Linux-based operating systems. This can be fixed by setting environment variable `LD_LIBRARY_PATH`.
 
 ~~~bash
@@ -63,9 +154,9 @@ export SBCL_SRC=~/.roswell/src/sbcl-2.4.1
 export LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH
 ~~~
 
-### Let's start with callback example
 
-!!!!TODO!!!!! This is ... well, a total mess. ! Probably start with very simple example, then this....
+
+
 
 
 
