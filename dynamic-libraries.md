@@ -56,9 +56,11 @@ Clone the SBCL-Librarian repostiory
 git clone https://github.com/quil-lang/sbcl-librarian.git
 ~~~
 
-### Let's start with callback example
+### Let's Start: Callback Example
 
 SBCL-Librarian comes with a couple of examples, the simple one is a callback to Python code.
+
+#### ASD File
 
 ASD file `libcallback.asd` declares a dependency on SBCL-Librarian
 
@@ -68,6 +70,8 @@ ASD file `libcallback.asd` declares a dependency on SBCL-Librarian
 ~~~
 
 ASDF system need to know where to look for SBCL-Librarian sources. One way is to set its directory your `CL_SOURCE_REGISTRY` environment variable.
+
+#### Bindings.lisp
 
 `bindings.lisp` contains the important parts for generating the C bindings.
 
@@ -139,79 +143,177 @@ Finally, `define-api` describes the structure of the code of library to create -
 
 The last part, `define-aggregate-library` defines the whole library, what should be included and in which order.
 
+#### Compile LISP Code
 
+Now we can compile the LISP code and generate the C sources for compiling our library and the Python wrapper.
 
-
---------------------------------------------
-
-
-**!!!!TODO!!!!!** This is ... well, a total mess. ! Probably start with very simple example, then this....
-
-SBCL-Librarian expects the path to SBCL sources in `SBCL_SRC` environment variable. Shred libraries are not commonly searched for in the current working directory on newer Linux-based operating systems. This can be fixed by setting environment variable `LD_LIBRARY_PATH`.
+A couple of environment variables can be set for convenience:
 
 ~~~bash
+# Directory with SBCL sources
 export SBCL_SRC=~/.roswell/src/sbcl-2.4.1
-export LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH
+# Directory with this project, don't forget the double slash at the end
+# or it might not work
+export CL_SOURCE_REGISTRY="~/prg/sbcl-librarian//"
 ~~~
 
+On more modern Linux-based systems, libraries are usually not searched for in the current directory. The same goes for paths which Python searches for libraries.
 
-
-
-
-
-
-SBCL Librarian has two examples - a simple callback and a more complex calculator. Let's explore the callback.
-
-It already contains a Makefile for Mac. For a Linxu-based OS, we should change the name of the created library from `libcallback.dylib` to `libcallback.so` (on Windows to `libcallback.dll`) and the `$(CC)` parameters for `libcallback.so` (or `dll`) target should be changed from `-dynamiclib` to `-shared -fpic`:
-
-~~~Makefile
-EXAMPLES_DIR := $(shell pwd)
-ROOT_DIR := $(shell dirname $(shell dirname $(EXAMPLES_DIR)))
-
-
-.PHONY: all clean
-
-all: libsbcl.so libcallback.so
-
-libsbcl.so: $(SBCL_SRC)
-	test ! -e $(SBCL_SRC)/src/runtime/libsbcl.so && cd $(SBCL_SRC) && ./make-shared-library.sh || true
-	cp $(SBCL_SRC)/src/runtime/libsbcl.so ./
-
-libcallback.core libcallback.c libcallback.h libcallback.py: 
-	CL_SOURCE_REGISTRY="$(ROOT_DIR)//" $(SBCL_SRC)/run-sbcl.sh --script "script.lisp"
-
-libcallback.so: libcallback.core libcallback.c
-	$(CC) -shared -fpic -o $@ libcallback.c -L$(SBCL_SRC)/src/runtime -lsbcl
-clean:
-	rm -f libsbcl.so libcallback.c libcallback.h libcallback.core libcallback.py libcallback.so
+~~~bash
+export LD_LIBRARY_PATH=.:
+export PATH=.:$PATH
 ~~~
 
-Windows:
+`script.lisp` is a fairly simple LISP script for compiling the LISP sources and outputting the wrapper code and the LISP core.
 
-~~~Makefile
-EXAMPLES_DIR := $(shell pwd)
-ROOT_DIR := $(shell dirname $(shell dirname $(EXAMPLES_DIR)))
+~~~lisp
+(require '#:asdf)
 
+(asdf:load-system '#:libcallback)
 
-.PHONY: all clean
+(in-package #:sbcl-librarian/example/libcallback)
 
-all: libsbcl.so libcallback.dll
-
-# For some reason, even on OSX SBCL builds its library with *.so
-# extension, but this works!
-libsbcl.so: $(SBCL_SRC)
-	test ! -e $(SBCL_SRC)/src/runtime/libsbcl.so && cd $(SBCL_SRC) && ./make-shared-library.sh || true
-	cp $(SBCL_SRC)/src/runtime/libsbcl.so ./libsbcl.dll
-
-libcallback.core libcallback.c libcallback.h libcallback.py: 
-	export CL_SOURCE_REGISTRY="$(ROOT_DIR):$(EXAMPLES_DIR)" && \
-	echo "cl_source_registry ${CL_SOURCE_REGISTRY}" && \
-	$(SBCL_SRC)/run-sbcl.sh --script "script.lisp"
-
-libcallback.dll: libcallback.core libcallback.c
-	$(CC) -shared -fpic -o $@ libcallback.c -L$(SBCL_SRC)/src/runtime -L$(EXAMPLES_DIR) -lsbcl
-clean:
-	rm -f libsbcl.dll libcallback.c libcallback.h libcallback.core libcallback.py libcallback.so
+(build-bindings libcallback ".")
+(build-python-bindings libcallback ".")
+(build-core-and-die libcallback "." :compression t)
 ~~~
 
-Python function find_library on Windows / MSYS: export PATH=.:$PATH
+Now, we have a couple of new files.
+
+`libcallback.c`, is the source code for our library.
+
+~~~c
+#define CALLBACKING_API_BUILD
+
+#include "libcallback.h"
+
+void (*lisp_release_handle)(void* handle);
+int (*lisp_handle_eq)(void* a, void* b);
+void (*lisp_enable_debugger)();
+void (*lisp_disable_debugger)();
+void (*lisp_gc)();
+err_t (*callback_call_callback)(void* fn, char* out_buffer);
+
+extern int initialize_lisp(int argc, char **argv);
+
+CALLBACKING_API int init(char* core) {
+  static int initialized = 0;
+  char *init_args[] = {"", "--core", core, "--noinform", };
+  if (initialized) return 1;
+  if (initialize_lisp(4, init_args) != 0) return -1;
+  initialized = 1;
+  return 0; }
+~~~
+
+At the top, we see a couple of SBCL-related functions like `lisp_gc` for telling the LISP garbagec collector that it's a good time to run. Then there is a pointer to our function `callback_call_callback`. Finaly, the `init` function which we should run before any LISP code is run.
+
+There is currently no way to de-initialize the LISP core.
+
+`libcallback.h` is a header file which should be included in both `lispcallback.c` and in any calling C code. Apart of prototypes of functions and function pointers in `lispcallback.c` it includes the error enum and any comments that were added in `bindings.lisp`:
+
+~~~C
+typedef enum { ERR_SUCCESS = 0, ERR_FAIL = 1, } err_t;
+~~~
+
+The last file is `lispcallback.py`, the Python wrapper around our library. The most interesting part is this:
+
+~~~Python
+from ctypes import *
+from ctypes.util import find_library
+
+try:
+    libpath = Path(find_library('libcallback')).resolve()
+except TypeError as e:
+    raise Exception('Unable to locate libcallback') from e
+~~~
+
+The rest of the file is similar to the C header file.
+
+As you can see, it loads a compiled C library (shared object, DLL, dylib) and tells the Python interpreter what can be done with the library. It also initializes the LISP core when it's loaded.
+
+
+#### Compile C Code
+
+~~~bash
+cc -shared -fpic -o libcallback.so libcallback.c -L$SBCL_SRC/src/runtime -lsbcl
+~~~
+
+On Mac OS the command might be a bit different:
+
+~~~bash
+cc -dynamiclib -o libcallback.dylib libcallback.c -L$SBCL_SRC/src/runtime -lsbcl
+~~~
+
+If you don't have `$SBCL_SRC/src/runtime` in your `$PATH`, copy the `$SBCL_SRC/src/runtime/libsbcl.so` file to the current directory.
+
+
+#### Run!
+
+Now, everything is ready. You can run the example code using
+
+~~~bash
+python3 ./example.py
+~~~
+
+If you see a rather cryptic error
+
+~~~bash
+$ python3 ./example.py 
+Traceback (most recent call last):
+  File "/home/user/prg/sbcl-librarian/examples/callback/./example.py", line 2, in <module>
+    import libcallback
+ImportError: dynamic module does not define module export function (PyInit_libcallback)
+~~~
+
+it means that Python is trying to load `libcallback.so` directly as if it was a compiled Python module (written in C). Since it isn't, I suggest to rename `libcallback.py` to something else like `callback.py` and from `example.py` import `callback` rather than `libcallback`.
+
+Now you should be able to see a correct result
+~~~bash
+ python3 ./example.py 
+I guess  it works!
+~~~
+
+#### Makefile
+
+This example has a Makefile for building it on Mac. It even automatically build the `libsbcl.so` library and copies it into the current directory. However the command for building `libcallback` needs to be modified to be usable on Linux-based operating systems and on Windows (MSYS2).
+
+### CMake
+
+Using CMake is rather straightforward, unfortunately there is currently no CMake-aware library or `vcpgk`/ `conan` package so we have to use `HINTS` with `find_library`.
+
+~~~CMake
+# If there is a better way, let me know.
+if(WIN32)
+    set(DIR_SEPARATOR ";")
+else()
+    set(DIR_SEPARATOR ":")
+endif()
+
+# Set the ENV Vars for building the LISP part
+set(SBCL_SRC "$ENV{SBCL_SRC}" CACHE PATH "Path to SBCL sources directory.")
+set(SBCL_LIBRARIAN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../sbcl-librarian" CACHE PATH "Source codes of SBCL-LIBRARIAN project.")
+set(CL_SOURCE_REGISTRY "${CMAKE_CURRENT_SOURCE_DIR}${DIR_SEPARATOR}${SBCL_LIBRARIAN_DIR}" CACHE PATH "ASDF registry for building of the libray.")
+
+# Find the SBCL library
+find_library(libsbcl NAMES sbcl HINTS ${SBCL_SRC}/src/runtime/)
+
+# Link the library to the C project
+target_link_libraries(my_project ${libsbcl})
+
+# Build LISP part of the project
+add_custom_command(OUTPUT my_project-lisp.core my_project-lisp.c my_project-lisp.h my_project-lisp.py
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMAND ${CMAKE_COMMAND} -E env CL_SOURCE_REGISTRY="${CL_SOURCE_REGISTRY}"
+        ${SBCL_SRC}/run-sbcl.sh ARGS --script script.lisp
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different my_project-lisp.core $<TARGET_FILE_DIR:my_project>
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different my_project-lisp.c $<TARGET_FILE_DIR:my_project>
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different my_project-lisp.h $<TARGET_FILE_DIR:my_project>
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different my_project-lisp.py $<TARGET_FILE_DIR:my_project>
+    COMMAND ${CMAKE_COMMAND} -E rm my_project-lisp.core my_project-lisp.c my_project-lisp.h my_project-lisp.py
+
+# Copy SBCL library if newer
+add_custom_command(TARGET my_project POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${libsbcl}"
+        $<TARGET_FILE_DIR:my_project>)
+~~~
