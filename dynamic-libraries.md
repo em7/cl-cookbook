@@ -56,11 +56,11 @@ Clone the SBCL-Librarian repostiory
 git clone https://github.com/quil-lang/sbcl-librarian.git
 ~~~
 
-### Let's Start: Callback Example
+## Let's Start: Callback Example
 
 SBCL-Librarian comes with a couple of examples, the simple one is a callback to Python code.
 
-#### ASD File
+### ASD File
 
 ASD file `libcallback.asd` declares a dependency on SBCL-Librarian
 
@@ -71,7 +71,7 @@ ASD file `libcallback.asd` declares a dependency on SBCL-Librarian
 
 ASDF system need to know where to look for SBCL-Librarian sources. One way is to set its directory your `CL_SOURCE_REGISTRY` environment variable.
 
-#### Bindings.lisp
+### Bindings.lisp
 
 `bindings.lisp` contains the important parts for generating the C bindings.
 
@@ -143,7 +143,7 @@ Finally, `define-api` describes the structure of the code of library to create -
 
 The last part, `define-aggregate-library` defines the whole library, what should be included and in which order.
 
-#### Compile LISP Code
+### Compile LISP Code
 
 Now we can compile the LISP code and generate the C sources for compiling our library and the Python wrapper.
 
@@ -232,7 +232,7 @@ The rest of the file is similar to the C header file.
 As you can see, it loads a compiled C library (shared object, DLL, dylib) and tells the Python interpreter what can be done with the library. It also initializes the LISP core when it's loaded.
 
 
-#### Compile C Code
+### Compile C Code
 
 ~~~bash
 cc -shared -fpic -o libcallback.so libcallback.c -L$SBCL_SRC/src/runtime -lsbcl
@@ -246,13 +246,13 @@ cc -dynamiclib -o libcallback.dylib libcallback.c -L$SBCL_SRC/src/runtime -lsbcl
 
 If you don't have `$SBCL_SRC/src/runtime` in your `$PATH`, copy the `$SBCL_SRC/src/runtime/libsbcl.so` file to the current directory.
 
-
-#### Run!
+### Run
 
 Now, everything is ready. You can run the example code using
 
 ~~~bash
-python3 ./example.py
+$ python3 ./example.py 
+I guess  it works!
 ~~~
 
 If you see a rather cryptic error
@@ -267,19 +267,15 @@ ImportError: dynamic module does not define module export function (PyInit_libca
 
 it means that Python is trying to load `libcallback.so` directly as if it was a compiled Python module (written in C). Since it isn't, I suggest to rename `libcallback.py` to something else like `callback.py` and from `example.py` import `callback` rather than `libcallback`.
 
-Now you should be able to see a correct result
-~~~bash
- python3 ./example.py 
-I guess  it works!
-~~~
+## Makefile
 
-#### Makefile
+Each example has a Makefile for building it on Mac. It even automatically build the `libsbcl.so` library and copies it into the current directory. However the command for building the project (e.g. `libcallback` itself) needs to be modified to be usable on Linux-based operating systems and on Windows (MSYS2).
 
-This example has a Makefile for building it on Mac. It even automatically build the `libsbcl.so` library and copies it into the current directory. However the command for building `libcallback` needs to be modified to be usable on Linux-based operating systems and on Windows (MSYS2).
-
-### CMake
+## CMake
 
 Using CMake is rather straightforward, unfortunately there is currently no CMake-aware library or `vcpgk`/ `conan` package so we have to use `HINTS` with `find_library`.
+
+Assuming you'd like to compile a project called `my_project` and would like to add a LISP library:
 
 ~~~CMake
 # If there is a better way, let me know.
