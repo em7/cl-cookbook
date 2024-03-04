@@ -18,18 +18,15 @@ This chapter describes a project called [SBCL-Librarian](https://github.com/quil
 
 ### Make SBCL Shared Library
 
-Binary distributions of SBCL usually don't come with SBCL built as a shared library which is needed for SBCL-Librarian. You can download either from [SBCL git repository](https://github.com/sbcl/sbcl) or [using Roswell](getting-started.html#with-roswell) by running command `ros install sbcl-source`.
+Binary distributions of SBCL usually do not come with SBCL built as a shared library, which is necessary for SBCL-Librarian. You can download it either from the [SBCL git repository](https://github.com/sbcl/sbcl) or by [using Roswell](getting-started.html#with-roswell) and running the command `ros install sbcl-source`.
 
-SBCL also needs a working Common Lisp system to bootstrap the compiliation
-process. Easy trick is to download a binary installation from Roswell and
-add it to your `PATH` variable.
 
-SBCL depends on `zstd` library. On Linux-based system, you can obtain both
-the library and its header files from the package manager, usually it's called
-something like `libzstd-dev`. On Windows, recommended way is to use
-[MSYS2](https://www.msys2.org) which includes both Roswell, `zstd` and its headers.
+SBCL also requires a working Common Lisp system to bootstrap the compilation process. An easy trick is to download a binary installation from Roswell and add it to your `PATH` variable.
 
-Go to the directory with sources and run:
+SBCL depends on the `zstd` library. On Linux-based systems, you can obtain both the library and its header files from the package manager, where it is usually named `libzstd-dev`. On Windows, the recommended approach is to use
+[MSYS2](https://www.msys2.org) which includes Roswell, `zstd`, and its headers.
+
+Navigate to the directory with the sources and run:
 
 ~~~bash
 # Bash
@@ -42,15 +39,12 @@ export PATH=~/.roswell/impls/x86-64/linux/sbcl-bin/2.4.1/bin/:$PATH
 ./make-shared-library.sh --fancy
 ~~~
 
-Note that the shared library has `.so` extension even on Windows and Mac
-but it seems to work just fine. If you use Roswell in MSYS2, it can sometimes
-use you Windows home directory rather than your MSYS2 home diretory, which
-are different paths. So the path to Roswell is `/C/Users/<username>/.roswell`,
+Note that the shared library has a `.so` extension even on Windows and Mac, but it seems to work just fine. If you use Roswell in MSYS2, it can sometimes use your Windows home directory rather than your MSYS2 home directory, which are different paths. Therefore, the path to Roswell might be `/C/Users/<username>/.roswell`,
 not `~/.roswell/`.
 
-### Download and setup SBCL-Librarian
+### Download and Setup SBCL-Librarian
 
-Clone the SBCL-Librarian repostiory
+Clone the SBCL-Librarian repostiory:
 
 ~~~bash
 git clone https://github.com/quil-lang/sbcl-librarian.git
@@ -58,22 +52,22 @@ git clone https://github.com/quil-lang/sbcl-librarian.git
 
 ## Let's Start: Callback Example
 
-SBCL-Librarian comes with a couple of examples, the simple one is a callback to Python code.
+SBCL-Librarian includes several examples, one of which is a simple callback to Python code.
 
 ### ASD File
 
-ASD file `libcallback.asd` declares a dependency on SBCL-Librarian
+The ASD file `libcallback.asd` declares a dependency on SBCL-Librarian:
 
 ~~~lisp
 :defsystem-depends-on (#:sbcl-librarian)
 :depends-on (#:sbcl-librarian)
 ~~~
 
-ASDF system need to know where to look for SBCL-Librarian sources. One way is to set its directory your `CL_SOURCE_REGISTRY` environment variable.
+The ASDF system needs to know where to find the SBCL-Librarian sources. One way to specify this is by setting the `CL_SOURCE_REGISTRY` environment variable to include its directory.
 
 ### Bindings.lisp
 
-`bindings.lisp` contains the important parts for generating the C bindings.
+`bindings.lisp` contains the crucial elements for generating the C bindings:
 
 ~~~lisp
 (defun call-callback (callback outbuffer)
@@ -81,9 +75,9 @@ ASDF system need to know where to look for SBCL-Librarian sources. One way is to
     (sb-alien:alien-funcall callback str outbuffer)))
 ~~~
 
-This is the most important function from the example - this one is called from Python code and calls back a Python method (`callback` parameter). Since SBCL-Librarian creates a C library and a Python module which wraps it, this function can be called from both C and Python. This example uses Python.
+This function is key to the example; it is invoked from Python code and calls back a Python method (the`callback` parameter). As SBCL-Librarian generates both a C library and a Python module that wraps it, this function can be called from either C or Python. This example focuses on Python.
 
-SBCL-Librarian uses `sb-alien` which is a SBCL package for calling C functions.`with-alien` creates a resource (in this case `str` of type `c-string`) which valid within its body and is disposed of when it gets out of scope, preventing memory leaks. `alien-funcall` calls a C function, in this case its `callback`. It is called with the newly created string and a string buffer which was passed in as an argument.
+SBCL-Librarian utilizes `sb-alien`, an SBCL package for interfacing with C functions. `with-alien` creates a resource (here it is `str` of type `c-string`) that is valid within its scope and is automatically disposed of afterward, preventing memory leaks. `alien-funcall` is used to call a C function, in this case `callback`, with a newly created string and a string buffer passed in as arguments.
 
 ~~~lisp
 (sbcl-librarian::define-type :callback
@@ -97,9 +91,7 @@ SBCL-Librarian uses `sb-alien` which is a SBCL package for calling C functions.`
   :python-type "c_char_p")
 ~~~
 
-This part defines types `callback` and `char-buffer`, in all three languages - C, Python and Common Lisp. C and Python types are `void *`. Common Lisp type has a proper function prototype. `sb-alien:*` means pointer, so `:callback` is a pointer to function, the result type of which is `void`, and which takes two parameters, a `c-string` and a `char *` (SB-Alien differentiates between a string and a pointer to a character).
-
-`:char-buffer` type is a `char *` in all three languages.
+This section defines the types `callback` and `char-buffer` in C, Python, and Common Lisp. The C and Python types for both are `void*` and `char*`, respectively. The Common Lisp type for callback specifies a function prototype: a pointer to a function that returns `void` and takes two parameters, a `c-string` and a pointer to a `char`. The `sb-alien:*` indicates a pointer, so `:callback` is a pointer to a function. The `:char-buffer` type represents a `char*` in all three languages.
 
 ~~~lisp
 (define-enum-type error-type "err_t"
@@ -112,19 +104,19 @@ This part defines types `callback` and `char-buffer`, in all three languages - C
         (return-from error-map 1)))))
 ~~~
 
-This creates a mapping between conditions signalled by Common Lisp functions and a return type of the wrapping C functions. If a condition is signalled from Common Lisp, it is translated to a number - a C function return value - within `define-error-map`. The enumeration type adds a C enum so instead of
+This creates a mapping between conditions signaled by Common Lisp functions and a return type for the wrapping C functions. If a condition is signaled from Common Lisp, it is translated into a number — a C function return value — within `define-error-map`. The enumeration type adds a C `enum`, so instead of:
 
 ~~~C
 if (1 == cl_function()) {
 ~~~
 
-you can type
+you can write:
 
 ~~~C
 if (ERR_FAIL == cl_function()) {
 ~~~
 
-which is easier to read.
+which is more readable.
 
 ~~~lisp
 (define-api libcallback-api (:error-map error-map
@@ -139,15 +131,15 @@ which is easier to read.
   sbcl-librarian:handles sbcl-librarian:environment libcallback-api)
 ~~~
 
-Finally, `define-api` describes the structure of the code of library to create - what should be the error map, what types and fuctions to include and in which order (`:literal` is just a literal, used for comments in this case). Note taht the function named `call-callback` uses previously defined types for its arguments, `callback` type for first argument called `fn` and `:char-buffer` type for its second argument `out_buffer`. Since `:function-prefix` is used, the actual name of the exported function will be `callback_call_callback`.
+`define-api` outlines the structure of the library code to be created, specifying the error map, types, functions, and their order (`:literal` is used for comments in this case). The function `call-callback` uses previously defined types for its arguments: the `callback` type for the first argument named `fn` and the `:char-buffer` type for its second argument `out_buffer`. The `:function-prefix` option means the actual name of the exported function will be `callback_call_callback`.
 
-The last part, `define-aggregate-library` defines the whole library, what should be included and in which order.
+`define-aggregate-library` defines the entire library, specifying what should be included and in what order.
 
 ### Compile LISP Code
 
-Now we can compile the LISP code and generate the C sources for compiling our library and the Python wrapper.
+Now you can compile the Lisp code and generate the C sources for compiling the library and the Python wrapper.
 
-A couple of environment variables can be set for convenience:
+Set a couple of environment variables for convenience:
 
 ~~~bash
 # Directory with SBCL sources
@@ -157,14 +149,14 @@ export SBCL_SRC=~/.roswell/src/sbcl-2.4.1
 export CL_SOURCE_REGISTRY="~/prg/sbcl-librarian//"
 ~~~
 
-On more modern Linux-based systems, libraries are usually not searched for in the current directory. The same goes for paths which Python searches for libraries.
+Libraries are usually not searched for in the current directory on more modern Linux-based systems, similar to paths Python searches for libraries.
 
 ~~~bash
 export LD_LIBRARY_PATH=.:
 export PATH=.:$PATH
 ~~~
 
-`script.lisp` is a fairly simple LISP script for compiling the LISP sources and outputting the wrapper code and the LISP core.
+`script.lisp` is a straightforward Lisp script for compiling the Lisp sources and outputting the wrapper code and the Lisp core.
 
 ~~~lisp
 (require '#:asdf)
@@ -178,9 +170,9 @@ export PATH=.:$PATH
 (build-core-and-die libcallback "." :compression t)
 ~~~
 
-Now, we have a couple of new files.
+Now you have a couple of new files.
 
-`libcallback.c`, is the source code for our library.
+`libcallback.c` is the source code for the library:
 
 ~~~c
 #define CALLBACKING_API_BUILD
@@ -205,17 +197,17 @@ CALLBACKING_API int init(char* core) {
   return 0; }
 ~~~
 
-At the top, we see a couple of SBCL-related functions like `lisp_gc` for telling the LISP garbagec collector that it's a good time to run. Then there is a pointer to our function `callback_call_callback`. Finaly, the `init` function which we should run before any LISP code is run.
+At the top, you'll find several SBCL-related functions, such as `lisp_gc`, which signals to the Lisp garbage collector that it is a good time to run. Then there is a pointer to the `callback_call_callback` function. Finally, the `init` function, which should be run before executing any Lisp code.
 
-There is currently no way to de-initialize the LISP core.
+Currently, there is no way to de-initialize the Lisp core.
 
-`libcallback.h` is a header file which should be included in both `lispcallback.c` and in any calling C code. Apart of prototypes of functions and function pointers in `lispcallback.c` it includes the error enum and any comments that were added in `bindings.lisp`:
+`libcallback.h ` is a header file that should be included in both `lispcallback.c` and any calling C code. It contains prototypes of functions and function pointers in `lispcallback.c`, includes the error `enum`, and any comments added in `bindings.lisp`:
 
 ~~~C
 typedef enum { ERR_SUCCESS = 0, ERR_FAIL = 1, } err_t;
 ~~~
 
-The last file is `lispcallback.py`, the Python wrapper around our library. The most interesting part is this:
+The last file, `lispcallback.py`, is a Python wrapper around the library. The most notable part is this:
 
 ~~~Python
 from ctypes import *
@@ -229,7 +221,7 @@ except TypeError as e:
 
 The rest of the file is similar to the C header file.
 
-As you can see, it loads a compiled C library (shared object, DLL, dylib) and tells the Python interpreter what can be done with the library. It also initializes the LISP core when it's loaded.
+This setup loads a compiled C library (shared object, DLL, dylib) and informs the Python interpreter about the functions and types included in the library. It also initializes the Lisp core when loaded by the Python interpreter.
 
 
 ### Compile C Code
@@ -244,18 +236,23 @@ On Mac OS the command might be a bit different:
 cc -dynamiclib -o libcallback.dylib libcallback.c -L$SBCL_SRC/src/runtime -lsbcl
 ~~~
 
-If you don't have `$SBCL_SRC/src/runtime` in your `$PATH`, copy the `$SBCL_SRC/src/runtime/libsbcl.so` file to the current directory.
+If you do not have `$SBCL_SRC/src/runtime` in your `$PATH`, you should copy the `$SBCL_SRC/src/runtime/libsbcl.so` file to the current directory.
 
 ### Run
 
-Now, everything is ready. You can run the example code using
+Now that everything is set up, you can run the example code using the following command:
 
 ~~~bash
 $ python3 ./example.py 
+~~~
+
+If it's successful, you should see the output:
+
+~~~bash
 I guess  it works!
 ~~~
 
-If you see a rather cryptic error
+If you encounter a cryptic error like this:
 
 ~~~bash
 $ python3 ./example.py 
@@ -265,17 +262,17 @@ Traceback (most recent call last):
 ImportError: dynamic module does not define module export function (PyInit_libcallback)
 ~~~
 
-it means that Python is trying to load `libcallback.so` directly as if it was a compiled Python module (written in C). Since it isn't, I suggest to rename `libcallback.py` to something else like `callback.py` and from `example.py` import `callback` rather than `libcallback`.
+It indicates that Python is attempting to load `libcallback.so` as if it were a compiled Python module (written in C). Since that is not the case, a workaround is to rename `libcallback.py` to another name, such as `callback.py`, and in `example.py` to import `callback` instead of `libcallback`.
 
 ## Makefile
 
-Each example has a Makefile for building it on Mac. It even automatically build the `libsbcl.so` library and copies it into the current directory. However the command for building the project (e.g. `libcallback` itself) needs to be modified to be usable on Linux-based operating systems and on Windows (MSYS2).
+Each example comes with a Makefile designed for building on Mac. It even automatically builds the `libsbcl.so` library and copies it into the current directory. However, the command for building the project (e.g., `libcallback`) needs to be modified to work on Linux-based operating systems and on Windows (with MSYS2).
 
 ## CMake
 
-Using CMake is rather straightforward, unfortunately there is currently no CMake-aware library or `vcpgk`/ `conan` package so we have to use `HINTS` with `find_library`.
+Using CMake is relatively straightforward. Unfortunately, there is currently no CMake-aware library or a `vcpkg`/`conan` package, so you'll need to use `HINTS` with `find_library` to locate the necessary libraries.
 
-Assuming you'd like to compile a project called `my_project` and would like to add a LISP library:
+Assuming you would like to compile a project named `my_project` and would like to add a LISP library, you could proceed as follows:
 
 ~~~CMake
 # If there is a better way, let me know.
